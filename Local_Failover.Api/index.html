@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Local Failover Demo</title>
+  <style>
+    body { font-family: Arial, sans-serif; background: #111; color: #eee; padding: 20px; }
+    h1 { color: #0ff; }
+    button { margin: 4px; padding: 6px 12px; cursor: pointer; border-radius: 4px; }
+    select, input { padding: 4px; margin: 4px; }
+    pre { background: #222; color: #0f0; padding: 10px; border-radius: 6px; overflow-x: auto; }
+    .error { color: #f55; }
+  </style>
+</head>
+<body>
+  <h1>Local Failover Controller</h1>
+  <div>
+    <label>Target:</label>
+    <select id="target">
+      <option value="http://localhost:5051">Cloud (5051)</option>
+      <option value="http://localhost:5050">Local (5050)</option>
+    </select>
+  </div>
+
+  <div>
+    <button onclick="getStatus()">Get Status</button>
+    <button onclick="toggleFence('Online')">Set Online</button>
+    <button onclick="toggleFence('Fenced')">Set Fenced</button>
+    <button onclick="toggleFence('Offline')">Set Offline</button>
+  </div>
+
+  <hr>
+
+  <h3>Backoffice / SalesOrders</h3>
+  <button onclick="testPost('backoffice','salesorders')">POST salesorder</button>
+  <button onclick="testGet('backoffice','salesorders')">GET salesorders</button>
+
+  <h3>FloorOps / StockMovements</h3>
+  <button onclick="testPost('floorops','stockmovements')">POST stockmovement</button>
+  <button onclick="testGet('floorops','stockmovements')">GET stockmovements</button>
+
+  <h3>Output</h3>
+  <pre id="output">waiting...</pre>
+
+<script>
+  const out = document.getElementById("output");
+  function log(obj) {
+    out.textContent = typeof obj === "string" ? obj : JSON.stringify(obj, null, 2);
+  }
+
+  function base() {
+    return document.getElementById("target").value;
+  }
+
+  async function getStatus() {
+    try {
+      const r = await fetch(`${base()}/status`);
+      const j = await r.json();
+      log(j);
+    } catch (e) {
+      log("⚠️ Connection error: " + e);
+    }
+  }
+
+  async function toggleFence(mode) {
+    try {
+      const r = await fetch(`${base()}/admin/fence?mode=${mode}`, { method: "POST" });
+      const j = await r.json();
+      log(j);
+    } catch (e) {
+      log("⚠️ Connection error: " + e);
+    }
+  }
+
+  async function testGet(domain, entity) {
+    try {
+      const r = await fetch(`${base()}/${domain}/${entity}`);
+      const j = await r.json();
+      log(j);
+    } catch (e) {
+      log("⚠️ Connection error: " + e);
+    }
+  }
+
+  async function testPost(domain, entity) {
+    try {
+      const r = await fetch(`${base()}/${domain}/${entity}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ dummy: true })
+      });
+      const txt = await r.text();
+      let obj;
+      try { obj = JSON.parse(txt); } catch { obj = txt; }
+      log(obj);
+    } catch (e) {
+      log("⚠️ Connection error: " + e);
+    }
+  }
+</script>
+</body>
+</html>
