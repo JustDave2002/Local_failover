@@ -3,61 +3,145 @@
 <head>
   <meta charset="UTF-8" />
   <title>Local Failover Demo</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
   <style>
-    body { font-family: Arial, sans-serif; background: #111; color: #eee; padding: 20px; }
-    h1 { color: #0ff; }
-    button { margin: 4px; padding: 6px 12px; cursor: pointer; border-radius: 4px; }
-    select, input { padding: 4px; margin: 4px; }
-    pre { background: #222; color: #0f0; padding: 10px; border-radius: 6px; overflow-x: auto; }
-    .error { color: #f55; }
+    :root { color-scheme: dark; }
+    body { font-family: system-ui, Arial, sans-serif; background:#0e0e0e; color:#eaeaea; margin:0; padding:24px; }
+    h1 { margin:0 0 12px; font-size:20px; color:#8ee7ff; }
+    .row { display:flex; gap:12px; align-items:center; flex-wrap:wrap; }
+    .card { background:#161616; border:1px solid #242424; border-radius:10px; padding:16px; margin:12px 0; }
+    label { font-size:12px; color:#bdbdbd; display:block; margin-bottom:4px; }
+    input { background:#111; color:#eee; border:1px solid #303030; border-radius:8px; padding:8px; min-width:160px; }
+    button { background:#1f6feb; border:none; color:#fff; padding:8px 12px; border-radius:8px; cursor:pointer; }
+    button.ghost { background:#2a2a2a; }
+    button.warn { background:#b9770e; }
+    button.bad { background:#b61e1e; }
+    button.ok { background:#2a8f2a; }
+    select { background:#111; color:#eee; border:1px solid #303030; border-radius:8px; padding:8px; }
+    .pill { display:inline-flex; align-items:center; gap:8px; padding:6px 10px; border-radius:999px; background:#1a1a1a; border:1px solid #2a2a2a; font-size:13px; }
+    .muted { color:#9a9a9a; }
+    pre { background:#111; color:#9cff9c; padding:12px; border-radius:10px; overflow:auto; max-height:320px; }
+    table { border-collapse:collapse; width:100%; }
+    th, td { border-bottom:1px solid #2a2a2a; padding:8px; text-align:left; font-size:14px; }
+    th { color:#a0a0a0; font-weight:600; }
+    .grid { display:grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap:12px; }
   </style>
 </head>
 <body>
-  <h1>Local Failover Controller</h1>
-  <div>
-    <label>Target:</label>
-    <select id="target">
-      <option value="http://localhost:5051">Cloud (5051)</option>
-      <option value="http://localhost:5050">Local (5050)</option>
-    </select>
+
+  <h1>Local Failover Demo</h1>
+
+  <div class="card">
+    <div class="row">
+      <div>
+        <label>Target API</label>
+        <select id="target">
+          <option value="http://localhost:5050">Local (5050)</option>
+          <option value="http://localhost:5051">Cloud (5051)</option>
+        </select>
+      </div>
+
+      <div class="pill" id="status-pill">🔴 status onbekend</div>
+
+      <div class="row">
+        <button class="ghost" onclick="getStatus()">Get Status</button>
+        <button class="ok" onclick="toggleFence('Online')">Set Online</button>
+        <button class="warn" onclick="toggleFence('Fenced')">Set Fenced</button>
+        <button class="bad" onclick="toggleFence('Offline')">Set Offline</button>
+      </div>
+    </div>
+    <div class="muted" style="margin-top:8px">Tip: status is per proces. Cloud en Local los togglen.</div>
   </div>
 
-  <div>
-    <button onclick="getStatus()">Get Status</button>
-    <button onclick="toggleFence('Online')">Set Online</button>
-    <button onclick="toggleFence('Fenced')">Set Fenced</button>
-    <button onclick="toggleFence('Offline')">Set Offline</button>
+  <div class="grid">
+    <div class="card">
+      <div class="row" style="justify-content:space-between; width:100%">
+        <h3 style="margin:0">Backoffice · SalesOrders</h3>
+        <div class="pill" id="so-post-pill">—</div>
+      </div>
+
+      <div class="row">
+        <div>
+          <label>Customer</label>
+          <input id="so-customer" placeholder="ACME" />
+        </div>
+        <div>
+          <label>Total</label>
+          <input id="so-total" type="number" step="0.01" placeholder="123.45" />
+        </div>
+      </div>
+      <div class="row" style="margin-top:8px">
+        <button onclick="createSalesOrder()">POST SalesOrder</button>
+        <button class="ghost" onclick="getSalesOrders()">GET SalesOrders</button>
+      </div>
+      <div id="so-table" style="margin-top:10px"></div>
+    </div>
+
+    <div class="card">
+      <div class="row" style="justify-content:space-between; width:100%">
+        <h3 style="margin:0">FloorOps · StockMovements</h3>
+        <div class="pill" id="sm-post-pill">—</div>
+      </div>
+
+      <div class="row">
+        <div>
+          <label>Product</label>
+          <input id="sm-product" placeholder="Flour-00" />
+        </div>
+        <div>
+          <label>Qty</label>
+          <input id="sm-qty" type="number" step="0.01" placeholder="-5" />
+        </div>
+        <div>
+          <label>Location</label>
+          <input id="sm-location" placeholder="LINE-1" />
+        </div>
+      </div>
+      <div class="row" style="margin-top:8px">
+        <button onclick="postStockMovement()">POST StockMovement</button>
+        <button class="ghost" onclick="getStockMovements()">GET StockMovements</button>
+      </div>
+      <div id="sm-table" style="margin-top:10px"></div>
+    </div>
   </div>
 
-  <hr>
-
-  <h3>Backoffice / SalesOrders</h3>
-  <button onclick="testPost('backoffice','salesorders')">POST salesorder</button>
-  <button onclick="testGet('backoffice','salesorders')">GET salesorders</button>
-
-  <h3>FloorOps / StockMovements</h3>
-  <button onclick="testPost('floorops','stockmovements')">POST stockmovement</button>
-  <button onclick="testGet('floorops','stockmovements')">GET stockmovements</button>
-
-  <h3>Output</h3>
-  <pre id="output">waiting...</pre>
+  <div class="card">
+    <h3>Raw Output</h3>
+    <pre id="output">ready.</pre>
+  </div>
 
 <script>
   const out = document.getElementById("output");
+  const pill = document.getElementById("status-pill");
+  const soTable = document.getElementById("so-table");
+  const smTable = document.getElementById("sm-table");
+  const soPostPill = document.getElementById("so-post-pill");
+  const smPostPill = document.getElementById("sm-post-pill");
+
+  const base = () => document.getElementById("target").value;
+
   function log(obj) {
     out.textContent = typeof obj === "string" ? obj : JSON.stringify(obj, null, 2);
   }
 
-  function base() {
-    return document.getElementById("target").value;
+  function setStatusIcon(info) {
+    const fence = (info?.fence || '').toLowerCase();
+    const role = info?.role || 'Unknown';
+    const icon = fence === 'online' ? '🟢'
+               : fence === 'fenced' ? '🟠'
+               : fence === 'offline' ? '🔴'
+               : '🟡';
+    pill.textContent = `${icon} ${role} · ${info?.fence || 'Unknown'}`;
   }
 
   async function getStatus() {
     try {
       const r = await fetch(`${base()}/status`);
       const j = await r.json();
+      setStatusIcon(j);
       log(j);
     } catch (e) {
+      pill.textContent = '🔴 unreachable';
       log("⚠️ Connection error: " + e);
     }
   }
@@ -66,37 +150,102 @@
     try {
       const r = await fetch(`${base()}/admin/fence?mode=${mode}`, { method: "POST" });
       const j = await r.json();
+      setStatusIcon({ role: (await (await fetch(`${base()}/status`)).json()).role, fence: mode });
       log(j);
     } catch (e) {
       log("⚠️ Connection error: " + e);
     }
   }
 
-  async function testGet(domain, entity) {
+  // ============ helpers ============
+  function renderTable(el, data) {
+    if (!Array.isArray(data) || data.length === 0) {
+      el.innerHTML = `<div class="muted">No rows.</div>`;
+      return;
+    }
+    const cols = Object.keys(data[0]);
+    const head = `<tr>${cols.map(c=>`<th>${escapeHtml(c)}</th>`).join('')}</tr>`;
+    const rows = data.map(row => `<tr>${cols.map(c=>`<td>${escapeHtml(String(row[c]))}</td>`).join('')}</tr>`).join('');
+    el.innerHTML = `<table>${head}${rows}</table>`;
+  }
+  function escapeHtml(s){ return s.replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[m])); }
+
+  function setPostPill(el, phase, status) {
+    if (phase === 'pending') { el.textContent = `🔄 posting...`; return; }
+    if (status >= 200 && status < 300) { el.textContent = `✔ ${status}`; return; }
+    if (status === 423) { el.textContent = `🟠 ${status} locked`; return; }
+    if (status === 0) { el.textContent = `🔴 offline`; return; }
+    el.textContent = `❌ ${status}`;
+  }
+
+  async function readJsonOrText(r) {
+    const txt = await r.text();
+    try { return JSON.parse(txt); } catch { return txt; }
+  }
+
+  // ============ Backoffice ============
+  async function getSalesOrders() {
     try {
-      const r = await fetch(`${base()}/${domain}/${entity}`);
+      const r = await fetch(`${base()}/backoffice/salesorders`);
       const j = await r.json();
+      renderTable(soTable, j);
       log(j);
-    } catch (e) {
-      log("⚠️ Connection error: " + e);
-    }
+    } catch(e) { log("⚠️ " + e); }
   }
 
-  async function testPost(domain, entity) {
+  async function createSalesOrder() {
+    const customer = document.getElementById('so-customer').value || 'ACME';
+    const total = parseFloat(document.getElementById('so-total').value || '0');
     try {
-      const r = await fetch(`${base()}/${domain}/${entity}`, {
+      setPostPill(soPostPill, 'pending');
+      const r = await fetch(`${base()}/backoffice/salesorders`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ dummy: true })
+        body: JSON.stringify({ customer, total })
       });
-      const txt = await r.text();
-      let obj;
-      try { obj = JSON.parse(txt); } catch { obj = txt; }
-      log(obj);
-    } catch (e) {
-      log("⚠️ Connection error: " + e);
+      const body = await readJsonOrText(r);
+      setPostPill(soPostPill, 'done', r.status);
+      log(body);
+      getSalesOrders();
+    } catch(e) {
+      setPostPill(soPostPill, 'done', 0);
+      log("⚠️ " + e);
     }
   }
+
+  // ============ FloorOps ============
+  async function getStockMovements() {
+    try {
+      const r = await fetch(`${base()}/floorops/stockmovements`);
+      const j = await r.json();
+      renderTable(smTable, j);
+      log(j);
+    } catch(e) { log("⚠️ " + e); }
+  }
+
+  async function postStockMovement() {
+    const product = document.getElementById('sm-product').value || 'Flour-00';
+    const qty = parseFloat(document.getElementById('sm-qty').value || '-1');
+    const location = document.getElementById('sm-location').value || 'LINE-1';
+    try {
+      setPostPill(smPostPill, 'pending');
+      const r = await fetch(`${base()}/floorops/stockmovements`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ product, qty, location })
+      });
+      const body = await readJsonOrText(r);
+      setPostPill(smPostPill, 'done', r.status);
+      log(body);
+      getStockMovements();
+    } catch(e) {
+      setPostPill(smPostPill, 'done', 0);
+      log("⚠️ " + e);
+    }
+  }
+
+  // init status
+  getStatus();
 </script>
 </body>
 </html>

@@ -1,4 +1,9 @@
+using Api;
+using Infrastructure.Data;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
+using Domain.Entities;
+
 
 namespace Api.Controllers;
 
@@ -6,6 +11,35 @@ namespace Api.Controllers;
 [Route("backoffice/salesorders")]
 public class SalesOrdersController : ControllerBase
 {
-    [HttpGet] public IActionResult List() => Ok(new[] { new { id = "demo-order-1", customer = "ACME", total = 100.0 }});
-    [HttpPost] public IActionResult Create([FromBody] object body) => Ok(new { ok = true, source = "fake" });
+    private readonly ErpDbContext _db;
+    public SalesOrdersController(ErpDbContext db) {_db = db; }
+    
+    [HttpGet] 
+    public async Task<IActionResult> List(CancellationToken ct)
+    {
+        var items = await _db.SalesOrders
+            .OrderByDescending(x => x.CreatedAtUtc)
+            .Take(50)
+            .ToListAsync(ct);
+        return Ok(items);
+    }
+    
+    [HttpPost]
+    public async Task<IActionResult> Create([FromBody] CreateSalesOrderRequest req, CancellationToken ct)
+    {
+        var now = DateTime.UtcNow;
+        //TODO: Rename to order
+        var so = new SalesOrder
+        {
+            Id = Guid.NewGuid(),
+            Customer = req.Customer,
+            Total = req.Total,
+            CreatedAtUtc = now
+        };
+        _db.SalesOrders.Add(so);
+        await _db.SaveChangesAsync(ct);
+
+        return Ok(new CreateSalesOrderResponse(so.Id, so.Customer, so.Total, so.CreatedAtUtc));
+    }
+    
 }

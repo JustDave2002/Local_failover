@@ -80,12 +80,12 @@ Install EF CLI (machine-wide) and the design package (project):
 
 ```powershell
 dotnet tool install --global dotnet-ef
-dotnet add package Microsoft.EntityFrameworkCore.Design
 ```
+<!-- dotnet add package Microsoft.EntityFrameworkCore.Design -->
 
 <!-- The codebase includes a **design-time factory** (`ErpDbContextFactory`) so EF CLI can find the right connection string per environment. -->
 
----
+
 
 ## 6) Create schema (migrations) and apply
 

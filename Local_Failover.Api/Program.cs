@@ -2,6 +2,9 @@ using Api.Pipeline.Middleware;
 using Domain.Policies;
 using Domain.Types;
 using Infrastructure.Fence;
+using Infrastructure.Heartbeat;
+using Infrastructure.Data;
+using Microsoft.EntityFrameworkCore;
 using Ports;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -22,13 +25,22 @@ builder.Services.AddSwaggerGen();
 // CORS policy (dev only)
 builder.Services.AddCors(o => o.AddPolicy("DevAll", p =>
 {
-    p.AllowAnyOrigin()      // TODO: dev-only; in prod whitelisten
+    p.AllowAnyOrigin()      
      .AllowAnyHeader()
      .AllowAnyMethod();
 }));
 
-var app = builder.Build();
+builder.Services.AddDbContext<ErpDbContext>(opt =>
+{
+    var cs = builder.Configuration.GetConnectionString("Db");
+    opt.UseSqlServer(cs);
+});
 
+builder.Services.AddHttpClient();
+builder.Services.AddSingleton<IHeartbeatProbe, HttpHeartbeatProbe>();
+builder.Services.AddHostedService<HeartbeatHostedService>();
+
+var app = builder.Build();
 
 // Pipeline
 app.UseSwagger();
