@@ -5,6 +5,7 @@ using Infrastructure.Fence;
 using Infrastructure.Heartbeat;
 using Infrastructure.Data;
 using Microsoft.EntityFrameworkCore;
+using Infrastructure.Messaging;
 using Ports;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -18,6 +19,12 @@ builder.Services.AddSingleton<IAppRoleProvider>(_ => new AppRoleProvider(role));
 builder.Services.AddSingleton<IDomainPolicy, DomainPolicy>();
 builder.Services.AddSingleton<IFenceStateProvider, FenceStateProvider>();
 builder.Services.AddControllers();
+// Rabbit
+builder.Services.AddSingleton<RabbitConnection>();
+builder.Services.AddSingleton<ICommandBus, RabbitCommandBus>();
+if (role == AppRole.Cloud) {
+    builder.Services.AddHostedService<CommandConsumer>();
+}
 // Swagger endpoint testing voor PoC
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
