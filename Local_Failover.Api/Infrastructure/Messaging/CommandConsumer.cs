@@ -19,9 +19,16 @@ public sealed class CommandConsumer : BackgroundService
     private IModel? _ch;
     private readonly string _exchangeCmd = "cmd";
     private string _queueName = "";
+    private readonly Dictionary<(string entity, string action), Func<JsonElement, Task<AckResultDto>>> _handlers;
 
     public CommandConsumer(RabbitConnection conn, ILogger<CommandConsumer> log, ErpDbContext db, IConfiguration cfg)
-    { _conn = conn; _log = log; _db = db; _cfg = cfg; }
+    { _conn = conn; _log = log; _db = db; _cfg = cfg; _handlers = new()
+    {
+        [("stockmovement", "post")] = HandleStockMovementPostAsync,
+        [("salesorder",    "post")] = HandleSalesOrderPostAsync
+    }; }
+
+    
 
     protected override Task ExecuteAsync(CancellationToken stoppingToken)
     {
@@ -59,42 +66,15 @@ public sealed class CommandConsumer : BackgroundService
                 return;
             }
 
-            if (env.Entity == "stockmovement" && env.Action == "post")
+            if (_handlers.TryGetValue((env.Entity, env.Action), out var handler))
             {
-                // payload → StockMovement
-                var sm = JsonSerializer.Deserialize<StockMovement>(env.Payload.GetRawText())!;
-                sm.CreatedAtUtc = DateTime.UtcNow;
-
-                _db.StockMovements.Add(sm);
-                await _db.SaveChangesAsync();
-
-                await SendAck(replyTo, corrId, new AckResultDto(true, 200, "ok"));
-            }
-
-            if (env.Entity == "salesorder" && env.Action == "post")
-            {
-                var so = JsonSerializer.Deserialize<SalesOrder>(env.Payload.GetRawText());
-                if (so is null)
-                {
-                    await SendAck(replyTo, corrId, new AckResultDto(false, 400, "bad payload"));
-                    _ch!.BasicNack(ea.DeliveryTag, false, requeue: false);
-                    return;
-                }
-
-                so.CreatedAtUtc = DateTime.UtcNow; // canoniseren
-                _db.SalesOrders.Add(so);
-                await _db.SaveChangesAsync();
-
-                await SendAck(replyTo, corrId, new AckResultDto(true, 200, "ok"));
+                var ack = await handler(env.Payload);
+                await SendAck(replyTo, corrId, ack);
                 _ch!.BasicAck(ea.DeliveryTag, false);
                 return;
             }
-            else
-            {
-                await SendAck(replyTo, corrId, new AckResultDto(false, 400, "unknown command"));
-            }
-
-            _ch!.BasicAck(ea.DeliveryTag, multiple: false);
+            await SendAck(replyTo, corrId, new AckResultDto(false, 400, "unknown command"));
+            _ch!.BasicNack(ea.DeliveryTag, false, requeue: false);
         }
         catch (Exception ex)
         {
@@ -115,6 +95,27 @@ public sealed class CommandConsumer : BackgroundService
         var body = Encoding.UTF8.GetBytes(JsonSerializer.Serialize(ack));
         _ch.BasicPublish(exchange: "", routingKey: replyTo, basicProperties: pk, body: body);
         return Task.CompletedTask;
+    }
+
+    // handlers:
+    private async Task<AckResultDto> HandleStockMovementPostAsync(JsonElement payload)
+    {
+        var sm = JsonSerializer.Deserialize<StockMovement>(payload.GetRawText());
+        if (sm is null) return new AckResultDto(false, 400, "bad payload");
+        sm.CreatedAtUtc = DateTime.UtcNow;
+        _db.StockMovements.Add(sm);
+        await _db.SaveChangesAsync();
+        return new AckResultDto(true, 200, "ok");
+    }
+
+    private async Task<AckResultDto> HandleSalesOrderPostAsync(JsonElement payload)
+    {
+        var so = JsonSerializer.Deserialize<SalesOrder>(payload.GetRawText());
+        if (so is null) return new AckResultDto(false, 400, "bad payload");
+        so.CreatedAtUtc = DateTime.UtcNow;
+        _db.SalesOrders.Add(so);
+        await _db.SaveChangesAsync();
+        return new AckResultDto(true, 200, "ok");
     }
 
     private sealed class CommandEnvelopeDto
