@@ -45,12 +45,12 @@
 
       <div class="row">
         <button class="ghost" onclick="getStatus()">Get Status</button>
+<!--         
         <button class="ok" onclick="toggleFence('Online')">Set Online</button>
         <button class="warn" onclick="toggleFence('Fenced')">Set Fenced</button>
-        <button class="bad" onclick="toggleFence('Offline')">Set Offline</button>
+        <button class="bad" onclick="toggleFence('Offline')">Set Offline</button> -->
       </div>
     </div>
-    <div class="muted" style="margin-top:8px">Tip: status is per proces. Cloud en Local los togglen.</div>
   </div>
 
   <div class="grid">
@@ -110,142 +110,139 @@
     <pre id="output">ready.</pre>
   </div>
 
-<script>
-  const out = document.getElementById("output");
-  const pill = document.getElementById("status-pill");
-  const soTable = document.getElementById("so-table");
-  const smTable = document.getElementById("sm-table");
-  const soPostPill = document.getElementById("so-post-pill");
-  const smPostPill = document.getElementById("sm-post-pill");
-
-  const base = () => document.getElementById("target").value;
-
-  function log(obj) {
-    out.textContent = typeof obj === "string" ? obj : JSON.stringify(obj, null, 2);
-  }
-
-  function setStatusIcon(info) {
-    const fence = (info?.fence || '').toLowerCase();
-    const role = info?.role || 'Unknown';
-    const icon = fence === 'online' ? '🟢'
-               : fence === 'fenced' ? '🟠'
-               : fence === 'offline' ? '🔴'
-               : '🟡';
-    pill.textContent = `${icon} ${role} · ${info?.fence || 'Unknown'}`;
-  }
-
-  async function getStatus() {
-    try {
-      const r = await fetch(`${base()}/status`);
-      const j = await r.json();
-      setStatusIcon(j);
-      log(j);
-    } catch (e) {
-      pill.textContent = '🔴 unreachable';
-      log("⚠️ Connection error: " + e);
+  <script>
+    const out = document.getElementById("output");
+    const pill = document.getElementById("status-pill");
+    const soTable = document.getElementById("so-table");
+    const smTable = document.getElementById("sm-table");
+    const soPostPill = document.getElementById("so-post-pill");
+    const smPostPill = document.getElementById("sm-post-pill");
+    const base = () => document.getElementById("target").value;
+  
+    function log(obj) {
+      out.textContent = typeof obj === "string" ? obj : JSON.stringify(obj, null, 2);
     }
-  }
-
-  async function toggleFence(mode) {
-    try {
-      const r = await fetch(`${base()}/admin/fence?mode=${mode}`, { method: "POST" });
-      const j = await r.json();
-      setStatusIcon({ role: (await (await fetch(`${base()}/status`)).json()).role, fence: mode });
-      log(j);
-    } catch (e) {
-      log("⚠️ Connection error: " + e);
+  
+    function setStatusIcon(info) {
+      const fence = (info?.fence || '').toLowerCase();
+      const role = info?.role || 'Unknown';
+      const icon = fence === 'online' ? '🟢'
+                 : fence === 'fenced' ? '🟠'
+                 : fence === 'offline' ? '🔴'
+                 : '🟡';
+      pill.textContent = `${icon} ${role} · ${info?.fence || 'Unknown'}`;
     }
-  }
-
-  // ============ helpers ============
-  function renderTable(el, data) {
-    if (!Array.isArray(data) || data.length === 0) {
-      el.innerHTML = `<div class="muted">No rows.</div>`;
-      return;
+  
+    async function getStatus() {
+      try {
+        const r = await fetch(`${base()}/status`);
+        const j = await r.json();
+        setStatusIcon(j);
+        log(j);
+      } catch (e) {
+        pill.textContent = '🔴 unreachable';
+        log("⚠️ Connection error: " + e);
+      }
     }
-    const cols = Object.keys(data[0]);
-    const head = `<tr>${cols.map(c=>`<th>${escapeHtml(c)}</th>`).join('')}</tr>`;
-    const rows = data.map(row => `<tr>${cols.map(c=>`<td>${escapeHtml(String(row[c]))}</td>`).join('')}</tr>`).join('');
-    el.innerHTML = `<table>${head}${rows}</table>`;
-  }
-  function escapeHtml(s){ return s.replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[m])); }
-
-  function setPostPill(el, phase, status) {
-    if (phase === 'pending') { el.textContent = `🔄 posting...`; return; }
-    if (status >= 200 && status < 300) { el.textContent = `✔ ${status}`; return; }
-    if (status === 423) { el.textContent = `🟠 ${status} locked`; return; }
-    if (status === 0) { el.textContent = `🔴 offline`; return; }
-    el.textContent = `❌ ${status}`;
-  }
-
-  async function readJsonOrText(r) {
-    const txt = await r.text();
-    try { return JSON.parse(txt); } catch { return txt; }
-  }
-
-  // ============ Backoffice ============
-  async function getSalesOrders() {
-    try {
-      const r = await fetch(`${base()}/backoffice/salesorders`);
-      const j = await r.json();
-      renderTable(soTable, j);
-      log(j);
-    } catch(e) { log("⚠️ " + e); }
-  }
-
-  async function createSalesOrder() {
-    const customer = document.getElementById('so-customer').value || 'ACME';
-    const total = parseFloat(document.getElementById('so-total').value || '0');
-    try {
-      setPostPill(soPostPill, 'pending');
-      const r = await fetch(`${base()}/backoffice/salesorders`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ customer, total })
-      });
-      const body = await readJsonOrText(r);
-      setPostPill(soPostPill, 'done', r.status);
-      log(body);
+  
+    function renderTable(el, data) {
+      if (!Array.isArray(data) || data.length === 0) {
+        el.innerHTML = `<div class="muted">No rows.</div>`;
+        return;
+      }
+      const cols = Object.keys(data[0]);
+      const head = `<tr>${cols.map(c=>`<th>${escapeHtml(c)}</th>`).join('')}</tr>`;
+      const rows = data.map(row => `<tr>${cols.map(c=>`<td>${escapeHtml(String(row[c]))}</td>`).join('')}</tr>`).join('');
+      el.innerHTML = `<table>${head}${rows}</table>`;
+    }
+  
+    function escapeHtml(s){ return s.replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[m])); }
+  
+    function setPostPill(el, phase, status) {
+      if (phase === 'pending') { el.textContent = `🔄 posting...`; return; }
+      if (status >= 200 && status < 300) { el.textContent = `✔ ${status}`; return; }
+      if (status === 423) { el.textContent = `🟠 ${status} locked`; return; }
+      if (status === 0) { el.textContent = `🔴 offline`; return; }
+      el.textContent = `❌ ${status}`;
+    }
+  
+    async function readJsonOrText(r) {
+      const txt = await r.text();
+      try { return JSON.parse(txt); } catch { return txt; }
+    }
+  
+    async function getSalesOrders() {
+      try {
+        const r = await fetch(`${base()}/backoffice/salesorders`);
+        const j = await r.json();
+        renderTable(soTable, j);
+        log(j);
+      } catch(e) { log("⚠️ " + e); }
+    }
+  
+    async function createSalesOrder() {
+      const customer = document.getElementById('so-customer').value || 'ACME';
+      const total = parseFloat(document.getElementById('so-total').value || '0');
+      try {
+        setPostPill(soPostPill, 'pending');
+        const r = await fetch(`${base()}/backoffice/salesorders`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ customer, total })
+        });
+        const body = await readJsonOrText(r);
+        setPostPill(soPostPill, 'done', r.status);
+        log(body);
+        await getSalesOrders(); // refresh after post
+      } catch(e) {
+        setPostPill(soPostPill, 'done', 0);
+        log("⚠️ " + e);
+      }
+    }
+  
+    async function getStockMovements() {
+      try {
+        const r = await fetch(`${base()}/floorops/stockmovements`);
+        const j = await r.json();
+        renderTable(smTable, j);
+        log(j);
+      } catch(e) { log("⚠️ " + e); }
+    }
+  
+    async function postStockMovement() {
+      const product = document.getElementById('sm-product').value || 'Flour-00';
+      const qty = parseFloat(document.getElementById('sm-qty').value || '-1');
+      const location = document.getElementById('sm-location').value || 'LINE-1';
+      try {
+        setPostPill(smPostPill, 'pending');
+        const r = await fetch(`${base()}/floorops/stockmovements`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ product, qty, location })
+        });
+        const body = await readJsonOrText(r);
+        setPostPill(smPostPill, 'done', r.status);
+        log(body);
+        await getStockMovements(); // refresh after post
+      } catch(e) {
+        setPostPill(smPostPill, 'done', 0);
+        log("⚠️ " + e);
+      }
+    }
+  
+    // auto-refresh when target changes
+    document.getElementById("target").addEventListener("change", () => {
+      log("🔄 Target API changed → refreshing data...");
+      getStatus();
       getSalesOrders();
-    } catch(e) {
-      setPostPill(soPostPill, 'done', 0);
-      log("⚠️ " + e);
-    }
-  }
-
-  // ============ FloorOps ============
-  async function getStockMovements() {
-    try {
-      const r = await fetch(`${base()}/floorops/stockmovements`);
-      const j = await r.json();
-      renderTable(smTable, j);
-      log(j);
-    } catch(e) { log("⚠️ " + e); }
-  }
-
-  async function postStockMovement() {
-    const product = document.getElementById('sm-product').value || 'Flour-00';
-    const qty = parseFloat(document.getElementById('sm-qty').value || '-1');
-    const location = document.getElementById('sm-location').value || 'LINE-1';
-    try {
-      setPostPill(smPostPill, 'pending');
-      const r = await fetch(`${base()}/floorops/stockmovements`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ product, qty, location })
-      });
-      const body = await readJsonOrText(r);
-      setPostPill(smPostPill, 'done', r.status);
-      log(body);
       getStockMovements();
-    } catch(e) {
-      setPostPill(smPostPill, 'done', 0);
-      log("⚠️ " + e);
-    }
-  }
-
-  // init status
-  getStatus();
-</script>
+    });
+  
+    // initial load
+    getStatus();
+    getSalesOrders();
+    getStockMovements();
+  </script>
+  
 </body>
 </html>

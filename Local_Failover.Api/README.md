@@ -121,6 +121,8 @@ dotnet run --launch-profile "Cloud"
 
 Alternatively you can run without profiles if the terminal's ENV is set: `echo $Env:ASPNETCORE_ENVIRONMENT`.
 
+7) voor snelle db reset: `dotnet ef database drop -f && dotnet ef database update` 
+
 <!-- ## 7) Quick sanity checks
 
 - Environment variable in this terminal:

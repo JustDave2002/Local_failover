@@ -1,0 +1,6 @@
+@Local_Failover.Api_HostAddress = http://localhost:5209
+
+GET {{Local_Failover.Api_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###

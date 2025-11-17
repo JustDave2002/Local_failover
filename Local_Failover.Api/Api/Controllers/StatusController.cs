@@ -10,15 +10,17 @@ public class StatusController : ControllerBase
 {
     private readonly IFenceStateProvider _fence;
     private readonly IAppRoleProvider _roleProvider;
+    private readonly IConfiguration _cfg;
 
-    public StatusController(IFenceStateProvider fence, IAppRoleProvider roleProvider)
-    { _fence = fence; _roleProvider = roleProvider; }
+    public StatusController(IFenceStateProvider fence, IAppRoleProvider roleProvider,  IConfiguration cfg)
+    { _fence = fence; _roleProvider = roleProvider; _cfg = cfg; }
 
     [HttpGet]
     public IActionResult Get()
     {
-        var fence = _fence.GetFenceMode("T1");
-        return Ok(new { role = _roleProvider.Role.ToString(), fence = fence.ToString(), tenantId = "T1" });
+        var tenantId = _cfg["Tenant:Id"];
+        var fence = _fence.GetFenceMode(tenantId);
+        return Ok(new { role = _roleProvider.Role.ToString(), fence = fence.ToString(), tenantId = tenantId });
     }
 }
 // TODO: add counters (pendingOutbox, appliedCount) bij outbox/consumer logic
