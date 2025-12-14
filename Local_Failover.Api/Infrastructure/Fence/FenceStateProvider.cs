@@ -19,10 +19,9 @@ public sealed class FenceStateProvider : IFenceStateProvider
         return _state;
     }
 
-    public void SetFenceMode(FenceMode newState)
+    public void SetFenceMode(FenceMode newMode)
     {
-        // TODO: moet aangeroepen vanuit Heartbeat/lease-logica
-        _state = newState;
-        _log.LogWarning("[FENCE] Mode changed → {Mode}", newState);
+        _state = newMode;
+        _log.LogWarning("[FENCE] Mode changed → {Mode}", newMode);
     }
 }

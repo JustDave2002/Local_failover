@@ -56,7 +56,6 @@ public sealed class WriteGuardMiddleware
          // normaliseer (plural→singular)
         if (!EntityNames.TryNormalize(rawEntity, out var entity))
         {
-            //TODO: andere status code
             ctx.Response.StatusCode = 423;
             await ctx.Response.WriteAsJsonAsync(new
             {
@@ -65,10 +64,6 @@ public sealed class WriteGuardMiddleware
             });
             return;
         }
-
-
-        
-        
 
         var fence = _fence.GetFenceMode(TenantId);
         var role = _roleProvider.Role;

@@ -7,24 +7,38 @@ public class ErpDbContextFactory : IDesignTimeDbContextFactory<ErpDbContext>
 {
     public ErpDbContext CreateDbContext(string[] args)
     {
-        // 1️⃣ Read environment name, e.g. "Cloud" or "Local"
+        // Determine environment: Cloud / Local / Development
         var env = Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT") ?? "Development";
 
-        // 2️⃣ Load appsettings + environment-specific file
+        // Always load config from project directory (not working directory)
+        var basePath = Directory.GetCurrentDirectory();
+
+        // Load appsettings + environment-specific file
         var cfg = new ConfigurationBuilder()
-            .SetBasePath(Directory.GetCurrentDirectory())
+            .SetBasePath(basePath)
             .AddJsonFile("appsettings.json", optional: false)
-            .AddJsonFile($"appsettings.{env}.json", optional: true)
+            .AddJsonFile($"appsettings.{env}.json", optional: false)
             .Build();
 
-        // 3️⃣ Read the connection string called "Db"
         var cs = cfg.GetConnectionString("Db");
 
-        // 4️⃣ Build the context options and return it
-        var opts = new DbContextOptionsBuilder<ErpDbContext>()
-            .UseSqlServer(cs)
-            .Options;
+        if (string.IsNullOrWhiteSpace(cs))
+        {
+            throw new Exception($"Connection string 'Db' not found for ENV={env}. BasePath={basePath}");
+        }
 
-        return new ErpDbContext(opts);
+        // Build the context options and return it
+        var builder = new DbContextOptionsBuilder<ErpDbContext>();
+
+        if (env == "Cloud")
+        {
+            builder.UseSqlite(cs);
+        } 
+        else
+        {
+            builder.UseSqlServer(cs);
+        }
+
+        return new ErpDbContext(builder.Options);
     }
 }

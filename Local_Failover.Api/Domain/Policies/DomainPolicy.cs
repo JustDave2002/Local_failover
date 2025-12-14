@@ -12,18 +12,20 @@ public sealed class DomainPolicy : IDomainPolicy
     public bool CanWrite(AppRole role, FenceMode fence, string entity)
     {
         
-        // Backoffice: Cloud RW, Local proxy
+        // Backoffice: Cloud RW, Local fenced
         if (entity == EntityNames.SalesOrder || entity == EntityNames.CustomerNote)
-            return true;
-            // role == AppRole.Cloud;
+        {
+            if (role == AppRole.Cloud)  return true; 
+            if (role == AppRole.Local)  return fence != FenceMode.Fenced; 
+        }
 
-        // Floor-ops
+        // Floor-ops: Local RW, cloud fenced
         if (entity == EntityNames.StockMovement)
         {
-            //TODO: check if fencing logic is still neat and logically managed. 
-            if (role == AppRole.Cloud)  return fence != FenceMode.Fenced; // Cloud RO bij fence
-            if (role == AppRole.Local)  return true; // Local: altijd door; controller routeert (Online→bus, Fenced→lokaal)
+            if (role == AppRole.Cloud)  return fence != FenceMode.Fenced; 
+            if (role == AppRole.Local)  return true; 
         }
         return false;
     }
 }
+ 

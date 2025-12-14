@@ -34,7 +34,7 @@
   <div class="card">
     <div class="row">
       <div>
-        <label>Target API</label>
+        <label for="Target API">Target API</label>
         <select id="target">
           <option value="http://localhost:5050">Local (5050)</option>
           <option value="http://localhost:5051">Cloud (5051)</option>
@@ -45,10 +45,6 @@
 
       <div class="row">
         <button class="ghost" onclick="getStatus()">Get Status</button>
-<!--         
-        <button class="ok" onclick="toggleFence('Online')">Set Online</button>
-        <button class="warn" onclick="toggleFence('Fenced')">Set Fenced</button>
-        <button class="bad" onclick="toggleFence('Offline')">Set Offline</button> -->
       </div>
     </div>
   </div>
@@ -62,11 +58,11 @@
 
       <div class="row">
         <div>
-          <label>Customer</label>
+          <label for="Customer">Customer</label>
           <input id="so-customer" placeholder="ACME" />
         </div>
         <div>
-          <label>Total</label>
+          <label for="Total">Total</label>
           <input id="so-total" type="number" step="0.01" placeholder="123.45" />
         </div>
       </div>
@@ -85,15 +81,15 @@
 
       <div class="row">
         <div>
-          <label>Product</label>
+          <label for="Product">Product</label>
           <input id="sm-product" placeholder="Flour-00" />
         </div>
         <div>
-          <label>Qty</label>
+          <label for="Qty">Qty</label>
           <input id="sm-qty" type="number" step="0.01" placeholder="-5" />
         </div>
         <div>
-          <label>Location</label>
+          <label for="Location">Location</label>
           <input id="sm-location" placeholder="LINE-1" />
         </div>
       </div>

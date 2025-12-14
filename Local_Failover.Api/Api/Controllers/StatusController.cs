@@ -18,7 +18,7 @@ public class StatusController : ControllerBase
     [HttpGet]
     public IActionResult Get()
     {
-        var tenantId = _cfg["Tenant:Id"];
+        var tenantId = _cfg["Tenant:Id"]?? "T1";
         var fence = _fence.GetFenceMode(tenantId);
         return Ok(new { role = _roleProvider.Role.ToString(), fence = fence.ToString(), tenantId = tenantId });
     }

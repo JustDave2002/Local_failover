@@ -37,9 +37,9 @@ public class ErpDbContext : DbContext {
             e.HasIndex(x => new { x.AckedUtc, x.CreatedUtc }); 
         });
 
-        b.Entity<SalesOrder>().Property(p => p.RowVersion).IsRowVersion();
-        b.Entity<CustomerNote>().Property(p => p.RowVersion).IsRowVersion();
-        b.Entity<StockMovement>().Property(p => p.RowVersion).IsRowVersion();
+        // b.Entity<SalesOrder>().Property(p => p.RowVersion).IsRowVersion();
+        // b.Entity<CustomerNote>().Property(p => p.RowVersion).IsRowVersion();
+        // b.Entity<StockMovement>().Property(p => p.RowVersion).IsRowVersion();
         // b.Entity<ProductionClose>().Property(p => p.RowVersion).IsRowVersion();
         b.Entity<OpApplied>().HasKey(x => x.OpId);
         b.Entity<Lease>().HasKey(x => x.TenantId);

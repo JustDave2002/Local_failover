@@ -5,7 +5,7 @@ public class SalesOrder {
     public string Customer { get; set; } = "";
     public decimal Total { get; set; }
     public DateTime CreatedAtUtc { get; set; } = DateTime.UtcNow;
-    public byte[] RowVersion { get; set; } = default!;
+    // public byte[] RowVersion { get; set; } = default!;
 }
 
 public class CustomerNote {
@@ -13,7 +13,7 @@ public class CustomerNote {
     public string Customer { get; set; } = "";
     public string Note { get; set; } = "";
     public DateTime CreatedAtUtc { get; set; } = DateTime.UtcNow;
-    public byte[] RowVersion { get; set; } = default!;
+    // public byte[] RowVersion { get; set; } = default!;
 }
 
 public class StockMovement {
@@ -22,15 +22,8 @@ public class StockMovement {
     public decimal Qty { get; set; }
     public string Location { get; set; } = "";
     public DateTime CreatedAtUtc { get; set; } = DateTime.UtcNow;
-    public byte[] RowVersion { get; set; } = default!;
+    // public byte[] RowVersion { get; set; } = default!;
 }
-
-// public class ProductionClose {
-//     public Guid Id { get; set; } = Guid.NewGuid();
-//     public string BatchCode { get; set; } = "";
-//     public DateTime ClosedAtUtc { get; set; } = DateTime.UtcNow;
-//     public byte[] RowVersion { get; set; } = default!;
-// }
 
 public class Outbox {
     public Guid Id { get; set; } = Guid.NewGuid(); // OpId

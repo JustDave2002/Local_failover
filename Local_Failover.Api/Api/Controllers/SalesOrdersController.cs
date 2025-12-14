@@ -110,13 +110,6 @@ public class SalesOrdersController : ControllerBase
 
                 return StatusCode(ack.Status, new { ok = false, via = "bus", error = ack.Message });
             }
-
-            if (fence == FenceMode.Fenced)
-            {
-                var fenceError = "backoffice is readonly in fenced mode";
-                // backoffice readonly tijdens outage
-                return StatusCode(StatusCodes.Status423Locked, new { ok = false, error = fenceError });
-            }
         }
 
         // cover off path

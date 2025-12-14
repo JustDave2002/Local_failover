@@ -3,7 +3,7 @@ using Microsoft.EntityFrameworkCore.Migrations;
 
 #nullable disable
 
-namespace Local_Failover.Api.Infrastructure.Data.Migrations
+namespace Local_Failover.Api.Migrations
 {
     /// <inheritdoc />
     public partial class Initial : Migration
@@ -12,14 +12,25 @@ namespace Local_Failover.Api.Infrastructure.Data.Migrations
         protected override void Up(MigrationBuilder migrationBuilder)
         {
             migrationBuilder.CreateTable(
+                name: "AppliedEvents",
+                columns: table => new
+                {
+                    Id = table.Column<Guid>(type: "TEXT", nullable: false),
+                    SeenAtUtc = table.Column<DateTime>(type: "TEXT", nullable: false)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_AppliedEvents", x => x.Id);
+                });
+
+            migrationBuilder.CreateTable(
                 name: "CustomerNotes",
                 columns: table => new
                 {
-                    Id = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
-                    Customer = table.Column<string>(type: "nvarchar(max)", nullable: false),
-                    Note = table.Column<string>(type: "nvarchar(max)", nullable: false),
-                    CreatedAtUtc = table.Column<DateTime>(type: "datetime2", nullable: false),
-                    RowVersion = table.Column<byte[]>(type: "rowversion", rowVersion: true, nullable: false)
+                    Id = table.Column<Guid>(type: "TEXT", nullable: false),
+                    Customer = table.Column<string>(type: "TEXT", nullable: false),
+                    Note = table.Column<string>(type: "TEXT", nullable: false),
+                    CreatedAtUtc = table.Column<DateTime>(type: "TEXT", nullable: false)
                 },
                 constraints: table =>
                 {
@@ -30,9 +41,9 @@ namespace Local_Failover.Api.Infrastructure.Data.Migrations
                 name: "Leases",
                 columns: table => new
                 {
-                    TenantId = table.Column<string>(type: "nvarchar(450)", nullable: false),
-                    ExpiresAtUtc = table.Column<DateTime>(type: "datetime2", nullable: false),
-                    LastBeatAtUtc = table.Column<DateTime>(type: "datetime2", nullable: false)
+                    TenantId = table.Column<string>(type: "TEXT", nullable: false),
+                    ExpiresAtUtc = table.Column<DateTime>(type: "TEXT", nullable: false),
+                    LastBeatAtUtc = table.Column<DateTime>(type: "TEXT", nullable: false)
                 },
                 constraints: table =>
                 {
@@ -43,8 +54,8 @@ namespace Local_Failover.Api.Infrastructure.Data.Migrations
                 name: "OpApplied",
                 columns: table => new
                 {
-                    OpId = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
-                    AppliedAtUtc = table.Column<DateTime>(type: "datetime2", nullable: false)
+                    OpId = table.Column<Guid>(type: "TEXT", nullable: false),
+                    AppliedAtUtc = table.Column<DateTime>(type: "TEXT", nullable: false)
                 },
                 constraints: table =>
                 {
@@ -55,12 +66,14 @@ namespace Local_Failover.Api.Infrastructure.Data.Migrations
                 name: "Outbox",
                 columns: table => new
                 {
-                    Id = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
-                    Direction = table.Column<string>(type: "nvarchar(max)", nullable: false),
-                    Entity = table.Column<string>(type: "nvarchar(max)", nullable: false),
-                    Payload = table.Column<string>(type: "nvarchar(max)", nullable: false),
-                    CreatedAtUtc = table.Column<DateTime>(type: "datetime2", nullable: false),
-                    SentAtUtc = table.Column<DateTime>(type: "datetime2", nullable: true)
+                    Id = table.Column<Guid>(type: "TEXT", nullable: false),
+                    TenantId = table.Column<string>(type: "TEXT", maxLength: 32, nullable: false),
+                    Entity = table.Column<string>(type: "TEXT", maxLength: 64, nullable: false),
+                    Action = table.Column<string>(type: "TEXT", maxLength: 32, nullable: false),
+                    PayloadJson = table.Column<string>(type: "TEXT", nullable: false),
+                    CreatedUtc = table.Column<DateTime>(type: "TEXT", nullable: false),
+                    SentUtc = table.Column<DateTime>(type: "TEXT", nullable: true),
+                    AckedUtc = table.Column<DateTime>(type: "TEXT", nullable: true)
                 },
                 constraints: table =>
                 {
@@ -71,11 +84,10 @@ namespace Local_Failover.Api.Infrastructure.Data.Migrations
                 name: "SalesOrders",
                 columns: table => new
                 {
-                    Id = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
-                    Customer = table.Column<string>(type: "nvarchar(max)", nullable: false),
+                    Id = table.Column<Guid>(type: "TEXT", nullable: false),
+                    Customer = table.Column<string>(type: "TEXT", nullable: false),
                     Total = table.Column<decimal>(type: "decimal(18,2)", nullable: false),
-                    CreatedAtUtc = table.Column<DateTime>(type: "datetime2", nullable: false),
-                    RowVersion = table.Column<byte[]>(type: "rowversion", rowVersion: true, nullable: false)
+                    CreatedAtUtc = table.Column<DateTime>(type: "TEXT", nullable: false)
                 },
                 constraints: table =>
                 {
@@ -86,22 +98,29 @@ namespace Local_Failover.Api.Infrastructure.Data.Migrations
                 name: "StockMovements",
                 columns: table => new
                 {
-                    Id = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
-                    Product = table.Column<string>(type: "nvarchar(max)", nullable: false),
+                    Id = table.Column<Guid>(type: "TEXT", nullable: false),
+                    Product = table.Column<string>(type: "TEXT", nullable: false),
                     Qty = table.Column<decimal>(type: "decimal(18,3)", nullable: false),
-                    Location = table.Column<string>(type: "nvarchar(max)", nullable: false),
-                    CreatedAtUtc = table.Column<DateTime>(type: "datetime2", nullable: false),
-                    RowVersion = table.Column<byte[]>(type: "rowversion", rowVersion: true, nullable: false)
+                    Location = table.Column<string>(type: "TEXT", nullable: false),
+                    CreatedAtUtc = table.Column<DateTime>(type: "TEXT", nullable: false)
                 },
                 constraints: table =>
                 {
                     table.PrimaryKey("PK_StockMovements", x => x.Id);
                 });
+
+            migrationBuilder.CreateIndex(
+                name: "IX_Outbox_AckedUtc_CreatedUtc",
+                table: "Outbox",
+                columns: new[] { "AckedUtc", "CreatedUtc" });
         }
 
         /// <inheritdoc />
         protected override void Down(MigrationBuilder migrationBuilder)
         {
+            migrationBuilder.DropTable(
+                name: "AppliedEvents");
+
             migrationBuilder.DropTable(
                 name: "CustomerNotes");
 
