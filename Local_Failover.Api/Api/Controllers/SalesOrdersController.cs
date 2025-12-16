@@ -17,11 +17,11 @@ public class SalesOrdersController : ControllerBase
     private readonly IFenceStateProvider _fence;
     private readonly IAppRoleProvider _role;
     private readonly ICommandBus _bus;
-    private readonly IEventPublisher _evt;
     private readonly IConfiguration _cfg;
+    private readonly ISyncGateway _gateway;
 
-    public SalesOrdersController(ErpDbContext db, IFenceStateProvider fence, IAppRoleProvider role, ICommandBus bus, IEventPublisher evt, IConfiguration cfg) 
-    { _db = db; _fence = fence; _role = role; _bus = bus; _evt = evt; _cfg = cfg; }
+    public SalesOrdersController(ErpDbContext db, IFenceStateProvider fence, IAppRoleProvider role, ICommandBus bus, IConfiguration cfg, ISyncGateway gateway) 
+    { _db = db; _fence = fence; _role = role; _bus = bus; _cfg = cfg; _gateway = gateway; }
     
     [HttpGet] 
     public async Task<IActionResult> List(CancellationToken ct)
@@ -37,83 +37,29 @@ public class SalesOrdersController : ControllerBase
     public async Task<IActionResult> Create([FromBody] CreateSalesOrderRequest req, CancellationToken ct)
     {
         var tenantId = _cfg["Tenant:Id"] ?? "T1";
-        var role     = _role.Role;
-        var fence    = _fence.GetFenceMode(tenantId);
-        var now      = req.CreatedAtUtc ?? DateTime.UtcNow;
+        var now = req.CreatedAtUtc ?? DateTime.UtcNow;
 
-        // Standard state - failover disabled
-        if (role == AppRole.Disabled)
+        var payload = new Domain.Entities.SalesOrder
         {
-            var order = new SalesOrder
-            {
-                Id           = Guid.NewGuid(),
-                Customer     = req.Customer,
-                Total        = req.Total,
-                CreatedAtUtc = now
-            };
+            Id = req.Id ?? Guid.NewGuid(),
+            Customer = req.Customer,
+            Total = req.Total,
+            CreatedAtUtc = now
+        };
 
-            _db.SalesOrders.Add(order);
-            await _db.SaveChangesAsync(ct);
+        var syncReq = new SyncRequest(
+            TenantId: tenantId,
+            Domain: "backoffice",
+            Entity: EntityNames.SalesOrder,
+            Action: "post",
+            Payload: payload,
+            AppliedLocally: false // controller-call, nog niet applied
+        );
 
-            return Ok(new CreateSalesOrderResponse(order.Id, order.Customer, order.Total, order.CreatedAtUtc));
-        }
+        var res = await _gateway.DispatchAsync(syncReq, ct);
 
-        // Cloud state
-        if (role == AppRole.Cloud) 
-        {
-            // Vereist geen fencing regels, wegens domeinpartitionering
-            var order = new SalesOrder
-            {
-                Id           = req.Id ?? Guid.NewGuid(),
-                Customer     = req.Customer,
-                Total        = req.Total,
-                CreatedAtUtc = now
-            };
+        if (!res.Ok) return StatusCode(res.Status, new { ok = false, mode = res.Mode, error = res.Message });
 
-            _db.SalesOrders.Add(order);
-            await _db.SaveChangesAsync(ct);
-            
-            var eid = Guid.NewGuid().ToString();
-            
-            await _evt.PublishAsync(tenantId, "salesorder", "created", order, eid);
-
-            return Ok(new CreateSalesOrderResponse(order.Id, order.Customer, order.Total, order.CreatedAtUtc));
-        }
-
-        // Local state
-        if (role == AppRole.Local)
-        {
-            if (fence == FenceMode.Online)
-            {
-                var orderId = Guid.NewGuid();
-
-                var env = new CommandEnvelope(
-                    TenantId: tenantId,
-                    Entity: EntityNames.SalesOrder,
-                    Action: "post",
-                    Payload: new
-                    {
-                        Id           = orderId,
-                        Customer     = req.Customer,
-                        Total        = req.Total,
-                        CreatedAtUtc = now
-                    },
-                    CorrelationId: Guid.NewGuid().ToString()
-                );
-
-                var ack = await _bus.SendWithAckAsync(env, TimeSpan.FromSeconds(3), ct);
-
-                if (ack.Ok)
-                {    
-                    return Ok(new { ok=true, via = "bus", id = orderId, status = ack.Status});
-                }
-
-                return StatusCode(ack.Status, new { ok = false, via = "bus", error = ack.Message });
-            }
-        }
-
-        // cover off path
-        return StatusCode(StatusCodes.Status500InternalServerError, new { error = "unhandled stockmovement branch" });
-    }
-    
+        return Ok(new { ok = true, mode = res.Mode, data = res.Data });
+    }    
 }

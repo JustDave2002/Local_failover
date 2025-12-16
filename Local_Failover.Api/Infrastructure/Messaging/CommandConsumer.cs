@@ -1,14 +1,11 @@
 using System.Text;
 using System.Text.Json;
-using Domain.Entities;
-using Infrastructure.Data;
+using Domain.Types;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using RabbitMQ.Client;
 using RabbitMQ.Client.Events;
 using Ports;
-using Api.Controllers; 
-using Domain.Types;
 
 namespace Infrastructure.Messaging;
 
@@ -16,63 +13,46 @@ public sealed class CommandConsumer : BackgroundService
 {
     private readonly RabbitConnection _conn;
     private readonly ILogger<CommandConsumer> _log;
-    private readonly IServiceProvider _sp;
     private readonly IConfiguration _cfg;
-    private readonly string _exchangeCmd = "cmd";
+    private readonly IFenceStateProvider _fence;
+    private readonly IAppRoleProvider _role;
+    private readonly ISyncGateway _gateway;
+
+    private const string ExchangeCmd = "cmd";
     private IModel? _ch;
     private string _queueName = "";
-    private readonly IFenceStateProvider _fence;
-
-    // dynamische routing-tabel
-    private readonly Dictionary<(string entity, string action), Func<JsonElement, IServiceScope, Task<AckResultDto>>> _handlers;
 
     public CommandConsumer(
         RabbitConnection conn,
         ILogger<CommandConsumer> log,
-        IServiceProvider sp,
         IConfiguration cfg,
-        IFenceStateProvider fence)
+        IFenceStateProvider fence,
+        IAppRoleProvider role,
+        ISyncGateway gateway)
     {
         _conn = conn;
         _log = log;
-        _sp  = sp;
         _cfg = cfg;
         _fence = fence;
-
-        _handlers = new()
-        {
-            // elke entry roept de juiste controller aan
-            [("salesorder", "post")] = async (payload, scope) =>
-            {
-                _log.LogInformation("[CMD] Processing salesorder");
-                var ctrl = scope.ServiceProvider.GetRequiredService<SalesOrdersController>();
-                var req = JsonSerializer.Deserialize<CreateSalesOrderRequest>(payload.GetRawText());
-                await ctrl.Create(req!, CancellationToken.None);
-                return new AckResultDto(true, 200, "salesorder handled via controller");
-            },
-
-            [("stockmovement", "post")] = async (payload, scope) =>
-            {
-                var ctrl = scope.ServiceProvider.GetRequiredService<StockMovementController>();
-                var req = JsonSerializer.Deserialize<PostStockMovementRequest>(payload.GetRawText());
-                await ctrl.Post(req!, CancellationToken.None);
-                return new AckResultDto(true, 200, "stockmovement handled via controller");
-            }
-        };
+        _role = role;
+        _gateway = gateway;
     }
 
     protected override Task ExecuteAsync(CancellationToken stoppingToken)
     {
         _ch = _conn.CreateChannel();
-        _ch.ExchangeDeclare(_exchangeCmd, ExchangeType.Topic, durable: true, autoDelete: false);
+        _ch.ExchangeDeclare(ExchangeCmd, ExchangeType.Topic, durable: true, autoDelete: false);
 
         var tenantId = _cfg["Tenant:Id"] ?? "T1";
-        _queueName = $"q.cmd.to.cloud.{tenantId}";
+        var target = _role.Role == AppRole.Cloud ? "cloud" : "local";
+
+        _queueName = $"q.cmd.to.{target}.{tenantId}";
         _ch.QueueDeclare(_queueName, durable: true, exclusive: false, autoDelete: false);
-        _ch.QueueBind(_queueName, _exchangeCmd, $"cmd.to.cloud.{tenantId}.#.post");
+        _ch.QueueBind(_queueName, ExchangeCmd, $"cmd.to.{target}.{tenantId}.#");
 
         var consumer = new AsyncEventingBasicConsumer(_ch);
         consumer.Received += OnReceivedAsync;
+
         _ch.BasicQos(0, 1, false);
         _ch.BasicConsume(_queueName, autoAck: false, consumer: consumer);
 
@@ -84,47 +64,62 @@ public sealed class CommandConsumer : BackgroundService
     {
         var props = ea.BasicProperties;
         var replyTo = props?.ReplyTo;
-        var corrId  = props?.CorrelationId ?? Guid.NewGuid().ToString();
-        //TODO: dynamic tenant Id
-        var fence = _fence.GetFenceMode("t1");
+        var corrId = props?.CorrelationId ?? Guid.NewGuid().ToString();
 
         try
         {
-            var json = Encoding.UTF8.GetString(ea.Body.ToArray());
-            var env  = JsonSerializer.Deserialize<CommandEnvelopeDto>(json);
+            var tenantId = _cfg["Tenant:Id"] ?? "T1";
+            var fence = _fence.GetFenceMode(tenantId);
 
-            if (env is null)
+            var json = Encoding.UTF8.GetString(ea.Body.ToArray());
+            var env = JsonSerializer.Deserialize<CommandEnvelopeDto>(json);
+
+            if (env is null || string.IsNullOrWhiteSpace(env.Entity) || string.IsNullOrWhiteSpace(env.Action))
             {
                 await SendAck(replyTo, corrId, new AckResultDto(false, 400, "bad envelope"));
                 _ch!.BasicNack(ea.DeliveryTag, false, requeue: false);
                 return;
             }
 
-            if (fence == FenceMode.Fenced) 
-            {
-                await SendAck(replyTo, corrId, new AckResultDto(false, 423, "Refused"));
-            }
+            
 
-            _log.LogInformation("[CMD] Received {Entity}.{Action} for tenant={Tenant}", env.Entity, env.Action, env.TenantId);
+            _log.LogInformation("[CMD] Received {Entity}.{Action} tenant={Tenant} appliedLocally={AppliedLocally}",
+                env.Entity, env.Action, env.TenantId ?? tenantId, env.AppliedLocally);
 
-            if (_handlers.TryGetValue((env.Entity, env.Action), out var handler))
+            // Maak SyncRequest voor gateway
+            var req = new SyncRequest(
+                TenantId: string.IsNullOrWhiteSpace(env.TenantId) ? tenantId : env.TenantId!,
+                Domain: env.Domain ?? "",
+                Entity: env.Entity,
+                Action: env.Action,
+                Payload: env.Payload,
+                AppliedLocally: env.AppliedLocally
+            );
+
+            var result = await _gateway.ReceiveAsync(req, CancellationToken.None);
+
+            // ACK terug naar producer
+            await SendAck(replyTo, corrId, new AckResultDto(result.Ok, result.Status, result.Message));
+
+            // Rabbit ack/nack policy
+            if (result.Ok)
             {
-                using var scope = _sp.CreateScope();
-                var ack = await handler(env.Payload, scope);
-                await SendAck(replyTo, corrId, ack);
                 _ch!.BasicAck(ea.DeliveryTag, false);
-                _log.LogInformation("[CMD] ✅ Applied {Entity}.{Action} via controller", env.Entity, env.Action);
+                _log.LogInformation("[CMD] ✅ Applied {Entity}.{Action} status={Status}", env.Entity, env.Action, result.Status);
                 return;
             }
 
-            await SendAck(replyTo, corrId, new AckResultDto(false, 400, "unknown command"));
-            _ch!.BasicNack(ea.DeliveryTag, false, requeue: false);
+            // Niet-ok: 5xx => requeue, anders drop (423/400 etc)
+            var requeue = result.Status >= 500;
+            _ch!.BasicNack(ea.DeliveryTag, false, requeue: requeue);
+            _log.LogWarning("[CMD] ❌ Failed {Entity}.{Action} status={Status} requeue={Requeue} msg={Msg}",
+                env.Entity, env.Action, result.Status, requeue, result.Message);
         }
         catch (Exception ex)
         {
             _log.LogError(ex, "[CMD] ❌ Error handling command");
             try { await SendAck(replyTo, corrId, new AckResultDto(false, 500, ex.Message)); } catch { }
-            _ch!.BasicNack(ea.DeliveryTag, multiple: false, requeue: false);
+            _ch!.BasicNack(ea.DeliveryTag, multiple: false, requeue: true);
         }
     }
 
@@ -133,7 +128,7 @@ public sealed class CommandConsumer : BackgroundService
         if (string.IsNullOrWhiteSpace(replyTo)) return Task.CompletedTask;
 
         var pk = _ch!.CreateBasicProperties();
-        pk.ContentType  = "application/json";
+        pk.ContentType = "application/json";
         pk.CorrelationId = correlationId;
 
         var body = Encoding.UTF8.GetBytes(JsonSerializer.Serialize(ack));
@@ -141,15 +136,17 @@ public sealed class CommandConsumer : BackgroundService
         return Task.CompletedTask;
     }
 
-    // nested helper DTOs
-
     private sealed class CommandEnvelopeDto
     {
-        public string TenantId { get; set; } = "";
+        public string? TenantId { get; set; }
+        public string? Domain { get; set; }          // optioneel
         public string Entity { get; set; } = "";
         public string Action { get; set; } = "";
         public JsonElement Payload { get; set; } = default;
-        public string CorrelationId { get; set; } = "";
+
+        // Cruciaal voor loop/duplicate voorkomen bij outbox flush:
+        // true = local had dit al opgeslagen (fenced write), cloud hoeft niet te resyncen
+        public bool AppliedLocally { get; set; } = false;
     }
 
     private record AckResultDto(bool Ok, int Status, string? Message);

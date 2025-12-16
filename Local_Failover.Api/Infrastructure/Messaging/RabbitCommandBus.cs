@@ -52,8 +52,11 @@ public sealed class RabbitCommandBus : ICommandBus, IDisposable
         props.DeliveryMode = 2; // persistent
         props.CorrelationId = cmd.CorrelationId;
         props.ReplyTo = "amq.rabbitmq.reply-to";
+        
+        // Als receiver niet op tijd kan consumeren, verdwijnt deze message automatisch.
+        props.Expiration = ((int)timeout.TotalMilliseconds).ToString();
 
-        var rk = $"cmd.to.cloud.{cmd.TenantId}.{cmd.Entity}.{cmd.Action}";
+        var rk = $"cmd.to.{cmd.Target}.{cmd.TenantId}.{cmd.Entity}.{cmd.Action}";
         var json = JsonSerializer.Serialize(cmd);
         var body = Encoding.UTF8.GetBytes(json);
 

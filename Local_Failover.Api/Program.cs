@@ -7,6 +7,10 @@ using Infrastructure.Data;
 using Microsoft.EntityFrameworkCore;
 using Infrastructure.Messaging;
 using Ports;
+using Application.Sync;
+using Infrastructure.Messaging.Handlers;
+
+
 
 var builder = WebApplication.CreateBuilder(args);
 Console.WriteLine("ENV= " + builder.Environment.EnvironmentName);
@@ -24,18 +28,29 @@ builder.Services.AddControllers();
 builder.Services.AddScoped<Api.Controllers.SalesOrdersController>();
 builder.Services.AddScoped<Api.Controllers.StockMovementController>();
 
+builder.Services.AddScoped<ICommandDispatcher, CommandDispatcher>();
+
+builder.Services.AddScoped<ISyncGateway, SyncGateway>();
+
+builder.Services.AddScoped<Ports.ISyncApplyHandler, Infrastructure.Messaging.Handlers.SalesOrderPostHandler>();
+builder.Services.AddScoped<Ports.ISyncApplyHandler, Infrastructure.Messaging.Handlers.StockMovementPostHandler>();
+
+builder.Services.AddScoped<IOutboxWriter, DbOutboxWriter>();
+builder.Services.AddHostedService<CommandConsumer>();
+builder.Services.AddHostedService<OutboxPublisherHostedService>();
+
+
 // Rabbit
 Console.WriteLine("Rabbit host=" + builder.Configuration["Rabbit:HostName"]);
 Console.WriteLine("Rabbit port=" + builder.Configuration["Rabbit:Port"]);
-builder.Services.AddSingleton<IEventPublisher, RabbitEventPublisher>();
 builder.Services.AddSingleton<RabbitConnection>();
 builder.Services.AddSingleton<ICommandBus, RabbitCommandBus>();
 if (role == AppRole.Cloud) {
-    builder.Services.AddHostedService<CommandConsumer>();
+    
 }
 if (role == AppRole.Local)  {
-    builder.Services.AddHostedService<EventConsumer>();
-    builder.Services.AddHostedService<OutboxPublisherHostedService>();
+    // builder.Services.AddHostedService<EventConsumer>();
+    
 }
 
 // Logging
@@ -67,7 +82,9 @@ builder.Services.AddDbContext<ErpDbContext>(opt =>
     var cs = builder.Configuration.GetConnectionString("Db");
     if (role == AppRole.Cloud) 
     {
-        opt.UseSqlite(cs);
+        // opt.UseSqlite(cs);
+        opt.UseSqlServer(cs);
+
     }
     else 
     {

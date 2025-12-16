@@ -7,10 +7,12 @@ public interface ICommandBus
 
 public record CommandEnvelope(
     string TenantId,
+    string Target,   // "cloud" | "local"
     string Entity,
     string Action,
     object Payload,
-    string CorrelationId
+    string CorrelationId,
+    bool AppliedLocally
 );
 
 public record AckResult(bool Ok, int Status, string? Message);

@@ -13,9 +13,17 @@ public sealed class OutboxPublisherHostedService : BackgroundService
     private readonly ILogger<OutboxPublisherHostedService> _log;
     private readonly IFenceStateProvider _fence;
     private readonly ICommandBus _bus;
+    private readonly IConfiguration _cfg;
 
-    public OutboxPublisherHostedService(IServiceProvider sp, ILogger<OutboxPublisherHostedService> log, IFenceStateProvider fence, ICommandBus bus)
-    { _sp = sp; _log = log; _fence = fence; _bus = bus; }
+    public OutboxPublisherHostedService(
+        IServiceProvider sp,
+        ILogger<OutboxPublisherHostedService> log,
+        IFenceStateProvider fence,
+        ICommandBus bus,
+        IConfiguration cfg)
+    {
+        _sp = sp; _log = log; _fence = fence; _bus = bus; _cfg = cfg;
+    }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
@@ -23,9 +31,10 @@ public sealed class OutboxPublisherHostedService : BackgroundService
         {
             try
             {
-                // alleen proberen te flushen als we Online zijn
-                //TODO: change tenant to dynamic loading
-                if (_fence.GetFenceMode("T1") == Domain.Types.FenceMode.Online)
+                var tenantId = _cfg["Tenant:Id"] ?? "T1";
+
+                // flush only when Online
+                if (_fence.GetFenceMode(tenantId) == Domain.Types.FenceMode.Online)
                 {
                     using var scope = _sp.CreateScope();
                     var db = scope.ServiceProvider.GetRequiredService<ErpDbContext>();
@@ -38,25 +47,36 @@ public sealed class OutboxPublisherHostedService : BackgroundService
 
                     foreach (var m in batch)
                     {
-                        _log.LogInformation("[OUTBOX] Sending {Entity} {Action} {Id}", m.Entity, m.Action, m.Id);
+                        var target = (m.Direction ?? "toCloud").Equals("toLocal", StringComparison.OrdinalIgnoreCase)
+                            ? "local"
+                            : "cloud";
+
+                        _log.LogInformation("[OUTBOX] Sending {Dir} {Entity} {Action} {Id}", m.Direction, m.Entity, m.Action, m.Id);
+
                         var env = new CommandEnvelope(
-                            m.TenantId, m.Entity, m.Action,
-                            JsonSerializer.Deserialize<object>(m.PayloadJson)!,
-                            Guid.NewGuid().ToString()
+                            TenantId: m.TenantId,
+                            Target: target,
+                            Entity: m.Entity,
+                            Action: m.Action,
+                            Payload: JsonSerializer.Deserialize<object>(m.PayloadJson)!,
+                            CorrelationId: Guid.NewGuid().ToString(),
+                            AppliedLocally: true
                         );
 
                         var ack = await _bus.SendWithAckAsync(env, TimeSpan.FromSeconds(7), stoppingToken);
+
                         if (ack.Ok)
                         {
-                            _log.LogInformation("[OUTBOX] ACK {Entity} {Id} @ {Time}", m.Entity, m.Id, m.AckedUtc);
-                            m.SentUtc = m.SentUtc ?? DateTime.UtcNow;
+                            m.SentUtc ??= DateTime.UtcNow;
                             m.AckedUtc = DateTime.UtcNow;
                             await db.SaveChangesAsync(stoppingToken);
+
+                            _log.LogInformation("[OUTBOX] ACK {Entity} {Id}", m.Entity, m.Id);
                         }
                         else
                         {
-                            _log.LogWarning("Outbox send failed {Status} {Msg}", ack.Status, ack.Message);
-                            break; // laat retry loop z’n werk doen
+                            _log.LogWarning("[OUTBOX] send failed {Status} {Msg}", ack.Status, ack.Message);
+                            break; // retry loop will handle
                         }
                     }
                 }
@@ -65,6 +85,7 @@ public sealed class OutboxPublisherHostedService : BackgroundService
             {
                 _log.LogError(ex, "Outbox flush error");
             }
+
             await Task.Delay(2000, stoppingToken);
         }
     }

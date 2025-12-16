@@ -10,7 +10,6 @@ public class ErpDbContext : DbContext {
     public DbSet<SalesOrder> SalesOrders => Set<SalesOrder>();
     public DbSet<CustomerNote> CustomerNotes => Set<CustomerNote>();
     public DbSet<StockMovement> StockMovements => Set<StockMovement>();
-    // public DbSet<ProductionClose> ProductionCloses => Set<ProductionClose>();
     public DbSet<OutboxMessage> Outbox => Set<OutboxMessage>();
     public DbSet<OpApplied> OpApplied => Set<OpApplied>();
     public DbSet<Lease> Leases => Set<Lease>();
@@ -29,11 +28,11 @@ public class ErpDbContext : DbContext {
         {
             e.HasKey(x => x.Id);                 // Guid
             e.Property(x => x.TenantId).HasMaxLength(32).IsRequired();
+            e.Property(x => x.Direction).HasMaxLength(16).IsRequired();
             e.Property(x => x.Entity).HasMaxLength(64).IsRequired();
             e.Property(x => x.Action).HasMaxLength(32).IsRequired();
             e.Property(x => x.PayloadJson).IsRequired();
             e.Property(x => x.CreatedUtc).IsRequired();
-            // SentUtc/AckedUtc mogen null zijn
             e.HasIndex(x => new { x.AckedUtc, x.CreatedUtc }); 
         });
 
